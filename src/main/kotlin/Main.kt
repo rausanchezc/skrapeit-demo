@@ -1,6 +1,8 @@
+import it.skrape.core.document
 import it.skrape.core.htmlDocument
 import it.skrape.fetcher.*
-import it.skrape.selects.and
+import it.skrape.selects.CssSelectable
+import it.skrape.selects.Doc
 import it.skrape.selects.eachLink
 import it.skrape.selects.eachText
 import it.skrape.selects.html5.*
@@ -77,16 +79,17 @@ fun getProperties(): Map<String, String> {
 }
 
 fun getPropertyDetails(url: String) {
-    val price = getPropertyPrice(url)
-    println(price)
+    val property = getPropertyPrice(url)
+    println(property.price)
 }
 
-fun getPropertyPrice(url: String): List<String> {
+fun getPropertyPrice(url: String): Property {
     return skrape(BrowserFetcher) {
         request {
             this.url = url
             headers = getHeaders()
         }
+
         response {
             htmlDocument {
                 val prices = section {
@@ -98,11 +101,16 @@ fun getPropertyPrice(url: String): List<String> {
                         }
                     }
                 }.take(2)
-                prices.map { it -> it.substringAfter(':').trim() }
+                    .map { it.substringAfter(':').trim() }
+                Property( price = Price( price = prices[0], ratioM2 = prices[1]))
             }
         }
+
+
+
     }
 }
 
-data class PropertyPrice(var price: Double = 0.0, var ratioM2: Double = 0.0)
+data class Property( val price: Price)
+data class Price(val price: String, val ratioM2: String)
 
