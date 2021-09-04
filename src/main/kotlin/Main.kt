@@ -1,14 +1,12 @@
-import it.skrape.core.document
 import it.skrape.core.htmlDocument
 import it.skrape.fetcher.*
-import it.skrape.selects.CssSelectable
-import it.skrape.selects.Doc
 import it.skrape.selects.eachLink
 import it.skrape.selects.eachText
 import it.skrape.selects.html5.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.UUID
 import kotlin.math.floor
 import kotlin.random.Random
 
@@ -18,11 +16,11 @@ fun main() = runBlocking {
     result.forEach{ (title, link) -> launch {
         val url = "https://www.idealista.com$link"
         println("$title ==> $url")
-        getPropertyDetails(url)
+        val property = getPropertyDetail(url)
+        println(property)
         delay(Random(3485).nextLong())
         }
     }
-
 }
 
 fun getHeaders(): Map<String, String> {
@@ -78,12 +76,7 @@ fun getProperties(): Map<String, String> {
     }
 }
 
-fun getPropertyDetails(url: String) {
-    val property = getPropertyPrice(url)
-    println(property.price)
-}
-
-fun getPropertyPrice(url: String): Property {
+fun getPropertyDetail(url: String): Property {
     return skrape(BrowserFetcher) {
         request {
             this.url = url
@@ -91,7 +84,10 @@ fun getPropertyPrice(url: String): Property {
         }
 
         response {
+            val platformId = url.removeSuffix("/").substringAfterLast('/')
             htmlDocument {
+                relaxed = true
+
                 val prices = section {
                     withClass = "price-features__container"
                     p {
@@ -102,15 +98,82 @@ fun getPropertyPrice(url: String): Property {
                     }
                 }.take(2)
                     .map { it.substringAfter(':').trim() }
-                Property( price = Price( price = prices[0], ratioM2 = prices[1]))
+
+               val description = div {
+                   withClass = "comment"
+                   p {
+                       findFirst {
+                           text
+                       }
+                   }.trim()
+               }
+
+                val details = div {
+                    withClass = "details-property_features"
+                    li {
+                        findAll {
+                            eachText
+                        }
+                    }
+                }
+
+                val lastUpdate = p {
+                    withClass = "stats-text"
+                    findFirst { text }
+                }
+
+                val location = div {
+                    withId = "headerMap"
+                    li {
+                        findAll {
+                            withClass = "header-map-list"
+                            eachText
+                        }
+                    }
+                }
+
+                val agencyId = p {
+                    withClass = "txt-ref"
+                    findFirst { text }
+                        .substringAfter(':')
+                        .trim()
+                }
+
+                val title = h1 {
+                    span {
+                        withClass = "main-info__title-main"
+                        findFirst {
+                            text
+                        }
+                    }
+                }
+
+                Property(
+                    platformId = platformId,
+                    agencyId = agencyId,
+                    title = title,
+                    description = description,
+                    price = Price( price = prices[0], ratioM2 = prices[1]),
+                    details = details,
+                    lastUpdate = lastUpdate,
+                    location = location.toSet()
+                )
             }
         }
-
-
-
     }
 }
 
-data class Property( val price: Price)
+data class Property(
+    val uuid: UUID = UUID.randomUUID(),
+    val platformId: String,
+    val agencyId: String = "(None)",
+    val title: String = "(Empty)",
+    val description: String,
+    val price: Price,
+    val details: List<String> = listOf(),
+    val lastUpdate: String,
+    val location: Set<String> = setOf()
+    )
+
 data class Price(val price: String, val ratioM2: String)
 
